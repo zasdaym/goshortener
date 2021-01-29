@@ -9,10 +9,10 @@ import (
 )
 
 type link struct {
-	ID        primitive.ObjectID
-	Slug      string
-	Target    string
-	CreatedAt time.Time
+	ID        primitive.ObjectID `json:"id" bson:"_id"`
+	Slug      string             `json:"slug" bson:"slug"`
+	Target    string             `json:"target" bson:"target"`
+	CreatedAt time.Time          `json:"created_at" bson:"created_at"`
 }
 
 type service interface {
