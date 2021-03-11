@@ -3,13 +3,11 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
-	"time"
+	"os"
+	"os/signal"
 
-	"github.com/zasdaym/goshortener/link"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/zasdaym/goshortener/http"
 )
 
 func main() {
@@ -19,40 +17,17 @@ func main() {
 }
 
 func run() error {
-	listenAddr := flag.String("addr", "0.0.0.0", "Listen address")
-	port := flag.String("port", "8080", "Listen port")
-	dbURL := flag.String("dburl", "mongodb://127.0.0.1:27017", "MongoDB URL")
-	dbName := flag.String("dbname", "goshortener", "MongoDB database name")
-	timeout := flag.Duration("timeout", 30*time.Second, "Server request timeout")
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		signal := <-ch
+		log.Printf("got signal: %v", signal)
+		cancel()
+	}()
 
-	flag.Parse()
-
-	db, err := connectMongoDB(*dbURL, *dbName)
-	if err != nil {
-		return err
-	}
-
-	linkService := link.NewMongoService(db)
-	linkServer := link.NewServer(link.ServerOpts{
-		Svc:     linkService,
-		Timeout: *timeout,
-	})
-	addr := *listenAddr + ":" + *port
-	return linkServer.Start(addr)
-}
-
-func connectMongoDB(dbURL string, dbName string) (*mongo.Database, error) {
-	client, err := mongo.NewClient(options.Client().ApplyURI(dbURL))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create new mongo client: %w", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	if err := client.Connect(ctx); err != nil {
-		return nil, fmt.Errorf("failed to connect to mongo database: %w", err)
-	}
-	if err := client.Ping(context.Background(), nil); err != nil {
-		return nil, fmt.Errorf("failed to ping mongo database: %w", err)
-	}
-	return client.Database(dbName), nil
+	port := flag.String("port", "8080", "Port to listen")
+	addr := ":" + *port
+	srv := http.NewServer(addr)
+	return srv.Serve(ctx)
 }
